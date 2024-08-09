@@ -1,12 +1,8 @@
-import os
-import pathlib
-import re
 
 import numpy as np
-import torch
-from torch import nn
+
 from torch.utils.data import Dataset, DataLoader
-import numpy
+
 from sklearn import metrics
 import torch
 
@@ -28,7 +24,7 @@ class spatial_feature_extraction_module(nn.Module):
         self.Flatten = nn.Flatten()
 
         self.relu = nn.ReLU()
-        self.linear1 = nn.Linear(17040, 1024)
+        self.linear1 = nn.Linear(11760, 1024)
         nn.init.xavier_normal_(self.linear1.weight, gain=1)
 
         self.linear2 = nn.Linear(1024, 2)
@@ -41,7 +37,7 @@ class spatial_feature_extraction_module(nn.Module):
         self.BatchNorm4 = nn.LazyBatchNorm2d()
         self.BatchNorm5 = nn.LazyBatchNorm2d()
         self.BatchNorm6 = nn.LazyBatchNorm2d()
-        self.dropout = nn.Dropout(0.4)  # best=0.3
+        self.dropout = nn.Dropout(0.8)
         self.max = nn.MaxPool2d(kernel_size=(2, 1), stride=2)
 
     def forward(self, input):
@@ -79,24 +75,24 @@ class MDPR(nn.Module):
         super(MDPR, self).__init__()
         self.spatial_feature_extraction_module = spatial_feature_extraction_module
 
-        # self.embedding =nn.Embedding(33, 1280)
+
         self.embedding = nn.Embedding.from_pretrained(torch.load("embedding_token"))
 
-        self.conv1 = nn.Conv2d(1, 3, kernel_size=(38, 13), stride=1) #38==max sequence length
+        self.conv1 = nn.Conv2d(1, 3, kernel_size=(32, 13), stride=1)
         nn.init.xavier_normal_(self.conv1.weight, gain=1)
 
-        self.conv2 = nn.Conv2d(1, 3, kernel_size=(38, 3), stride=1)
+        self.conv2 = nn.Conv2d(1, 3, kernel_size=(32, 3), stride=1)
         nn.init.xavier_normal_(self.conv2.weight, gain=1)
 
-        self.conv3 = nn.Conv2d(1, 3, kernel_size=(38, 5), stride=1)
+        self.conv3 = nn.Conv2d(1, 3, kernel_size=(32, 5), stride=1)
         nn.init.xavier_normal_(self.conv3.weight, gain=1)
 
-        self.conv4 = nn.Conv2d(1, 3, kernel_size=(38, 7), stride=1)
+        self.conv4 = nn.Conv2d(1, 3, kernel_size=(32, 7), stride=1)
         nn.init.xavier_normal_(self.conv4.weight, gain=1)
 
-        self.conv5 = nn.Conv2d(1, 3, kernel_size=(38, 9), stride=1)
+        self.conv5 = nn.Conv2d(1, 3, kernel_size=(32, 9), stride=1)
         nn.init.xavier_normal_(self.conv5.weight, gain=1)
-        self.conv6 = nn.Conv2d(1, 3, kernel_size=(38, 11), stride=1)
+        self.conv6 = nn.Conv2d(1, 3, kernel_size=(32, 11), stride=1)
         nn.init.xavier_normal_(self.conv6.weight, gain=1)
         self.Flatten = nn.Flatten()
 
@@ -115,7 +111,7 @@ class MDPR(nn.Module):
         self.BatchNorm4 = nn.LazyBatchNorm2d()
         self.BatchNorm5 = nn.LazyBatchNorm2d()
         self.BatchNorm6 = nn.LazyBatchNorm2d()
-        self.dropout = nn.Dropout(0.4)
+        self.dropout = nn.Dropout(0.8)  # best=0.3
         self.max = nn.MaxPool2d(kernel_size=(1, 2), stride=2)
 
     def forward(self, input, xyz):
@@ -171,8 +167,10 @@ class MDPR(nn.Module):
         all = torch.cat([all2, all1], 1)
 
         return self.linear3(all)
-    def train_tcr(self, input, xyz):
+    def train_tcr(self, input):
+        # print(input.shape)
         input = self.embedding(input)
+        # print(input.shape)
         input = input.reshape(input.shape[0], 1, input.shape[1], input.shape[2])
         # food_conv1 = self.maxpool1(self.dropout(self.BatchNorm(self.relu(self.food_conv1(input)))).squeeze(3))
         conv1 = self.conv1(input)
@@ -241,7 +239,8 @@ def caculateAUC(AUC_outs, AUC_labels):
     outs = np.array(outs)
 
     labels = np.array(labels)
-
+    np.save("mdpr_label", labels)
+    np.save("mdpr_outs", outs)
     fpr, tpr, thresholds = metrics.roc_curve(labels, outs, pos_label=1)
     auc = metrics.auc(fpr, tpr)
     aupr = metrics.average_precision_score(labels, outs)
@@ -254,8 +253,8 @@ class Mydata(Dataset):
         self.data = data
 
     def __getitem__(self, index):
-        x, z, y = self.data[index]
-        gene = torch.from_numpy(x)
+        z, x, y = self.data[index]
+        gene = torch.from_numpy(x.numpy())
         z = torch.from_numpy(z)
         # gene=gene.float()
 
@@ -264,7 +263,7 @@ class Mydata(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
-feature = np.load("v_yes.npy", allow_pickle=True)
+feature = np.load("Lan_yes.npy", allow_pickle=True)
 feature_number = feature.shape[0]
 print(feature_number)
 vn_idx = range(0, feature_number)
@@ -272,7 +271,7 @@ vn_idx = range(0, feature_number)
 count = 0
 nn_s = int(np.ceil(feature_number * (1 - 0.33)))
 
-feature2 = np.load("v_no.npy", allow_pickle=True)
+feature2 = np.load("Lan_no.npy", allow_pickle=True)
 feature_number2 = feature2.shape[0]
 print(feature_number2)
 vn_idx2 = range(0, feature_number2)
@@ -282,7 +281,7 @@ nn_s2 = int(np.ceil(feature_number2 * (1 - 0.33)))
 PredictClassList = []
 PredictLabelList = []
 AUCDictList = []
-n = 1
+n = 10
 all_acc = 0.0
 all_auc = 0.0
 while count < n:
@@ -316,7 +315,7 @@ while count < n:
     train_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[1000], gamma=0.1)
     # optimizer = torch.optim.Adam(params=model.parameters(),lr=0.0001)
     loss = torch.nn.CrossEntropyLoss()
-    for i in range(600):  # 600
+    for i in range(600):
         test_acc = 0.0
         train_acc = 0.0
         model_spatial_feature_extraction_module.train()
@@ -333,25 +332,33 @@ while count < n:
             result_loss = result_loss.cuda()
             result_loss.backward()
             optimizer.step()
+            train_acc = train_acc + ((out.argmax(1) == label).sum())
+        # print(i)
+        # print("train")
+        train_scheduler.step()
+
+
     model = MDPR(spatial_feature_extraction_module=model_spatial_feature_extraction_module)
     model = model.cuda()
+
     optimizer = torch.optim.SGD([{'params': model.parameters(), 'initial_lr': 0.00001}], lr=0.00001,
                                 momentum=0.99,
                                 weight_decay=5e-3)
     # optimizer = torch.optim.AdamW(params=model.parameters(), lr=0.00001, weight_decay=5e-3)
-    train_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2000, 3000], gamma=0.1)
+    train_scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2000], gamma=0.1)
     # optimizer = torch.optim.Adam(params=model.parameters(),lr=0.0001)
     loss = torch.nn.CrossEntropyLoss()
-    for i in range(1000):  # 4000
+    for i in range(2000):  # 4000
         test_acc = 0.0
         train_acc = 0.0
         model.train()
         for data in dataloader_train:
-            input, xyz, label = data
+            input,xyz,label = data
+            input=input.reshape(-1,32)
             input = input.cuda()
             xyz = xyz.cuda()
             label = label.cuda()
-            out = model.train_tcr(input, xyz)
+            out = model(input,xyz)
             out = out.cuda()
             optimizer.zero_grad()
             result_loss = loss(out, label)
@@ -362,36 +369,7 @@ while count < n:
             train_acc = train_acc + ((out.argmax(1) == label).sum())
         # print(i)
         # print("train")
-        train_scheduler.step()
-
-    optimizer = torch.optim.SGD([{'params': model.parameters(), 'initial_lr': 0.00001}], lr=0.00001,
-                                momentum=0.99,
-                                weight_decay=5e-3)
-    # optimizer = torch.optim.AdamW(params=model.parameters(), lr=0.00001, weight_decay=5e-3)
-    train_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2000, 3000], gamma=0.1)
-    # optimizer = torch.optim.Adam(params=model.parameters(),lr=0.0001)
-    loss = torch.nn.CrossEntropyLoss()
-    for i in range(4000):  # 4000
-        test_acc = 0.0
-        train_acc = 0.0
-        model.train()
-        for data in dataloader_train:
-            input, xyz, label = data
-            input = input.cuda()
-            xyz = xyz.cuda()
-            label = label.cuda()
-            out = model(input, xyz)
-            out = out.cuda()
-            optimizer.zero_grad()
-            result_loss = loss(out, label)
-
-            result_loss = result_loss.cuda()
-            result_loss.backward()
-            optimizer.step()
-
-        # print(i)
-        # print("train")
-        train_scheduler.step()
+        train_scheduler2.step()
 
     model.eval()
     auc_label = []
@@ -400,13 +378,12 @@ while count < n:
     with torch.no_grad():
 
             for data in dataloader_test:
-                input, xyz, label = data
+                input, xyz,label = data
+                input = input.reshape(-1,32)
                 input = input.cuda()
-
                 xyz = xyz.cuda()
-
                 label = label.cuda()
-                out =  model(input, xyz)
+                out = model(input, xyz)
                 out = out.cuda()
 
                 result_loss = loss(out, label)
@@ -419,7 +396,6 @@ while count < n:
 
 
             auc_number, aupr = caculateAUC(auc_out, auc_label)
-            print("accuracy:{},auc:{}".format(float(test_acc / my_test.__len__()), auc_number))
-
+            print("acc:{},auc:{}".format(float(test_acc / my_test.__len__()), auc_number))
 
 
